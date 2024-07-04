@@ -3275,7 +3275,7 @@ void tcg_gen_atomic_cmpxchg_i32_with_checked_addr(
             gen(retv, cpu_env, (TCGv)checked_addr, cmpv, newv, tcg_constant_i32(oi));
         }
 #else
-        gen(retv, cpu_env, addr, cmpv, newv);
+        gen(retv, cpu_env, (TCGv)checked_addr, cmpv, newv);
 #endif
 
         if (memop & MO_SIGN) {
@@ -3428,7 +3428,7 @@ static void do_atomic_op_i32(TCGv_i32 ret, TCGv_cap_checked_ptr checked_addr,
         gen(ret, cpu_env, (TCGv)checked_addr, val, tcg_constant_i32(oi));
     }
 #else
-    gen(ret, cpu_env, addr, val);
+    gen(ret, cpu_env, (TCGv)checked_addr, val);
 #endif
 #if defined(TARGET_CHERI)
     TCGv_i32 tcoi = tcg_const_i32(make_memop_idx(memop, idx));
