@@ -20,6 +20,9 @@
 #include "qemu.h"
 #include "signal-common.h"
 #include "linux-user/trace.h"
+#ifdef TARGET_CHERI
+    #include "machine/cheri.h"
+#endif
 
 struct target_sigcontext {
     uint64_t fault_address;
@@ -120,12 +123,11 @@ static void target_setup_general_frame(struct target_rt_sigframe *sf,
     __put_user(0, &sf->uc.tuc_link);
 
     target_save_altstack(&sf->uc.tuc_stack, env);
-
     for (i = 0; i < 31; i++) {
-        __put_user(env->xregs[i], &sf->uc.tuc_mcontext.regs[i]);
+        __put_user(arm_get_xreg(env,i), &sf->uc.tuc_mcontext.regs[i]);
     }
-    __put_user(env->xregs[31], &sf->uc.tuc_mcontext.sp);
-    __put_user(env->pc, &sf->uc.tuc_mcontext.pc);
+    __put_user(arm_get_xreg(env,31), &sf->uc.tuc_mcontext.sp);
+    __put_user(cpu_get_recent_pc(env), &sf->uc.tuc_mcontext.pc);
     __put_user(pstate_read(env), &sf->uc.tuc_mcontext.pstate);
 
     __put_user(env->exception.vaddress, &sf->uc.tuc_mcontext.fault_address);
@@ -206,16 +208,19 @@ static void target_restore_general_frame(CPUARMState *env,
     sigset_t set;
     uint64_t pstate;
     int i;
+    abi_ulong frame_addr;
 
     target_to_host_sigset(&set, &sf->uc.tuc_sigmask);
     set_sigmask(&set);
-
     for (i = 0; i < 31; i++) {
-        __get_user(env->xregs[i], &sf->uc.tuc_mcontext.regs[i]);
+        frame_addr = arm_get_xreg(env, i);
+        __get_user(frame_addr, &sf->uc.tuc_mcontext.regs[i]);
     }
 
-    __get_user(env->xregs[31], &sf->uc.tuc_mcontext.sp);
-    __get_user(env->pc, &sf->uc.tuc_mcontext.pc);
+    frame_addr = arm_get_xreg(env, 31);
+    __get_user(frame_addr, &sf->uc.tuc_mcontext.sp);
+    frame_addr = cpu_get_recent_pc(env);
+    __get_user(frame_addr, &sf->uc.tuc_mcontext.pc);
     __get_user(pstate, &sf->uc.tuc_mcontext.pstate);
     pstate_write(env, pstate);
 }
@@ -489,8 +494,8 @@ static void target_setup_frame(int usig, struct target_sigaction *ka,
 
     /* Set up the stack frame for unwinding.  */
     fr = (void *)frame + fr_ofs;
-    __put_user(env->xregs[29], &fr->fp);
-    __put_user(env->xregs[30], &fr->lr);
+    __put_user(arm_get_xreg(env,29), &fr->fp);
+    __put_user(arm_get_xreg(env,30), &fr->lr);
 
     if (ka->sa_flags & TARGET_SA_RESTORER) {
         return_addr = ka->sa_restorer;
@@ -505,12 +510,15 @@ static void target_setup_frame(int usig, struct target_sigaction *ka,
         return_addr = frame_addr + fr_ofs
             + offsetof(struct target_rt_frame_record, tramp);
     }
-    env->xregs[0] = usig;
-    env->xregs[29] = frame_addr + fr_ofs;
-    env->xregs[30] = return_addr;
-    env->xregs[31] = frame_addr;
+    arm_set_xreg(env, 0, usig);
+    arm_set_xreg(env, 29, frame_addr + fr_ofs);
+    arm_set_xreg(env, 30, return_addr);
+    arm_set_xreg(env, 31, frame_addr);
+#ifdef TARGET_CHERI    
+    cheri_prepare_pcc((cap_register_t*)&ka->_sa_handler, env);
+#else
     env->pc = ka->_sa_handler;
-
+#endif
     /* Invoke the signal handler as if by indirect call.  */
     if (cpu_isar_feature(aa64_bti, env_archcpu(env))) {
         env->btype = 2;
@@ -518,8 +526,8 @@ static void target_setup_frame(int usig, struct target_sigaction *ka,
 
     if (info) {
         tswap_siginfo(&frame->info, info);
-        env->xregs[1] = frame_addr + offsetof(struct target_rt_sigframe, info);
-        env->xregs[2] = frame_addr + offsetof(struct target_rt_sigframe, uc);
+        arm_set_xreg(env, 1, frame_addr + offsetof(struct target_rt_sigframe, info));
+        arm_set_xreg(env, 2, frame_addr + offsetof(struct target_rt_sigframe, uc));
     }
 
     unlock_user(frame, frame_addr, layout.total_size);
@@ -546,7 +554,7 @@ void setup_frame(int sig, struct target_sigaction *ka,
 long do_rt_sigreturn(CPUARMState *env)
 {
     struct target_rt_sigframe *frame = NULL;
-    abi_ulong frame_addr = env->xregs[31];
+    abi_ulong frame_addr = arm_get_xreg(env,31);
 
     trace_user_do_rt_sigreturn(env, frame_addr);
     if (frame_addr & 15) {

@@ -23,9 +23,9 @@ static inline void cpu_clone_regs_child(CPUARMState *env, target_ulong newsp,
                                         unsigned flags)
 {
     if (newsp) {
-        env->xregs[31] = newsp;
+        arm_set_xreg(env, 31, newsp);
     }
-    env->xregs[0] = 0;
+    arm_set_xreg(env, 0, 0);
 }
 
 static inline void cpu_clone_regs_parent(CPUARMState *env, unsigned flags)
@@ -42,6 +42,6 @@ static inline void cpu_set_tls(CPUARMState *env, target_ulong newtls)
 
 static inline abi_ulong get_sp_from_cpustate(CPUARMState *state)
 {
-   return state->xregs[31];
+    return arm_get_xreg(state, 31);
 }
 #endif

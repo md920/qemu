@@ -22,6 +22,9 @@
 #include "qemu.h"
 #include "cpu_loop-common.h"
 #include "qemu/guest-random.h"
+#ifdef TARGET_CHERI
+#include "machine/cheri.h"
+#endif
 
 #define get_user_code_u32(x, gaddr, env)                \
     ({ abi_long __r = get_user_u32((x), (gaddr));       \
@@ -84,22 +87,27 @@ void cpu_loop(CPUARMState *env)
         trapnr = cpu_exec(cs);
         cpu_exec_end(cs);
         process_queued_cpu_work(cs);
+#ifdef TARGET_CHERI
+        pstate_write(env, pstate_read(env) | PSTATE_C64);
+        arm_rebuild_chflags(env);
+#endif
 
         switch (trapnr) {
-        case EXCP_SWI:
+        case EXCP_SWI:            
             ret = do_syscall(env,
-                             env->xregs[8],
-                             env->xregs[0],
-                             env->xregs[1],
-                             env->xregs[2],
-                             env->xregs[3],
-                             env->xregs[4],
-                             env->xregs[5],
-                             0, 0);
+                            arm_get_xreg(env, 8),
+                            arm_get_xreg(env, 0),
+                            arm_get_xreg(env, 1),
+                            arm_get_xreg(env, 2),
+                            arm_get_xreg(env, 3),
+                            arm_get_xreg(env, 4),
+                            arm_get_xreg(env, 5),
+                            0, 0);
             if (ret == -TARGET_ERESTARTSYS) {
-                env->pc -= 4;
+                target_ulong cur = cpu_get_recent_pc(env);
+                arm_update_pc(env, cur-4, true);
             } else if (ret != -TARGET_QEMU_ESIGRETURN) {
-                env->xregs[0] = ret;
+                arm_set_xreg(env, 0, ret);
             }
             break;
         case EXCP_INTERRUPT:
@@ -109,7 +117,7 @@ void cpu_loop(CPUARMState *env)
             info.si_signo = TARGET_SIGILL;
             info.si_errno = 0;
             info.si_code = TARGET_ILL_ILLOPN;
-            info._sifields._sigfault._addr = env->pc;
+            info._sifields._sigfault._addr = cpu_get_recent_pc(env);
             queue_signal(env, info.si_signo, QEMU_SI_FAULT, &info);
             break;
         case EXCP_PREFETCH_ABORT:
@@ -129,8 +137,9 @@ void cpu_loop(CPUARMState *env)
             queue_signal(env, info.si_signo, QEMU_SI_FAULT, &info);
             break;
         case EXCP_SEMIHOST:
-            env->xregs[0] = do_arm_semihosting(env);
-            env->pc += 4;
+            arm_set_xreg(env, 0, do_arm_semihosting(env));
+            target_ulong cur = cpu_get_recent_pc(env);
+            arm_update_pc(env, cur+4, true);
             break;
         case EXCP_YIELD:
             /* nothing to do here for user-mode, just resume guest code */
@@ -163,12 +172,15 @@ void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)
                 "The selected ARM CPU does not support 64 bit mode\n");
         exit(EXIT_FAILURE);
     }
-
     for (i = 0; i < 31; i++) {
-        env->xregs[i] = regs->regs[i];
+        arm_set_xreg(env, i, regs->regs[i]);
     }
+#ifdef TARGET_CHERI
+    cheri_prepare_pcc((cap_register_t*)&regs->pc, env);
+#else
     env->pc = regs->pc;
-    env->xregs[31] = regs->sp;
+#endif
+    arm_set_xreg(env, 31, regs->sp);
 #ifdef TARGET_WORDS_BIGENDIAN
     env->cp15.sctlr_el[1] |= SCTLR_E0E;
     for (i = 1; i < 4; ++i) {
