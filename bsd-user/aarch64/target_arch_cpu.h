@@ -22,7 +22,7 @@
 #include "target_arch.h"
 
 #include "machine/armreg.h"
-#ifdef TARGER_CHERI
+#ifdef TARGET_CHERI
 #include "machine/cheri.h"
 #endif
 
