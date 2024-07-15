@@ -532,10 +532,17 @@ static void elf_core_copy_regs(target_elf_gregset_t *regs,
 {
     int i;
 
+#if TARGET_ARCH == aarch64
+    for (i = 0; i < 32; i++) {
+        (*regs)[i] = tswapreg(arm_get_xregs(env, i));
+    }
+    (*regs)[32] = tswapreg(cpu_get_recent_pc(env));
+#else
     for (i = 0; i < 32; i++) {
         (*regs)[i] = tswapreg(env->xregs[i]);
     }
     (*regs)[32] = tswapreg(env->pc);
+#endif
     (*regs)[33] = tswapreg(pstate_read((CPUARMState *)env));
 }
 
