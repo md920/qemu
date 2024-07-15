@@ -456,7 +456,7 @@ int cpu_memory_readcap_debug(CPUState *cpu, target_ulong addr, void *ptr,
         if (!(p = lock_user(VERIFY_READ, addr, l, 1)))
             return -1;
 
-        ram_block = qemu_get_ram_block((vm_offset_t)p);
+        ram_block = qemu_get_ram_block((unsigned long)p);
         ram_ptr = qemu_ram_ptr_length(ram_block,
                                       qemu_ram_block_host_offset(ram_block, p),
                                       &l, false);

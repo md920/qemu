@@ -65,7 +65,7 @@ static gint cheri_tagtree_cmp_lookup(gconstpointer a, gconstpointer b,
     gpointer user_data)
 {
     const struct RAMBlock *blocka, *blockb;
-    vm_offset_t cursora, cursorb;
+    unsigned long cursora, cursorb;
 
     blocka = (const struct RAMBlock *)a;
     blockb = (const struct RAMBlock *)b;
@@ -97,11 +97,11 @@ static gint cheri_tagtree_cmp_search(gconstpointer a, gconstpointer b)
 {
     RAMBlock *block;
     ram_addr_t cursor;
-    vm_offset_t addr;
+    unsigned long addr;
 
     block = (struct RAMBlock *)a;
     cursor = qemu_ram_get_cursor(block);
-    addr = (vm_offset_t)b;
+    addr = (unsigned long)b;
 
     if (cursor <= addr) {
         if (addr < cursor + qemu_ram_get_length(block)) {
