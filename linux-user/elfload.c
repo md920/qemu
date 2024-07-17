@@ -13,6 +13,9 @@
 #include "qemu/units.h"
 #include "qemu/selfmap.h"
 #include "qapi/error.h"
+#ifdef TARGET_CHERI
+    #include "aarch64/machine/cheri.h"
+#endif
 
 #ifdef _ARCH_PPC64
 #undef ARCH_DLINFO
@@ -532,7 +535,7 @@ static void elf_core_copy_regs(target_elf_gregset_t *regs,
 {
     int i;
 
-#if TARGET_ARCH == aarch64
+#ifdef TARGET_CHERI
     for (i = 0; i < 32; i++) {
         (*regs)[i] = tswapreg(arm_get_xregs(env, i));
     }

@@ -22,6 +22,7 @@
 #include "linux-user/trace.h"
 #ifdef TARGET_CHERI
     #include "machine/cheri.h"
+    #include "target/arm/cpu.h"
 #endif
 
 struct target_sigcontext {
