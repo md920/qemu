@@ -15,6 +15,7 @@
 #include "qapi/error.h"
 #ifdef TARGET_CHERI
     #include "aarch64/machine/cheri.h"
+    #include "target/arm/cpu.h"
 #endif
 
 #ifdef _ARCH_PPC64
@@ -537,9 +538,9 @@ static void elf_core_copy_regs(target_elf_gregset_t *regs,
 
 #ifdef TARGET_CHERI
     for (i = 0; i < 32; i++) {
-        (*regs)[i] = tswapreg(arm_get_xregs(env, i));
+        (*regs)[i] = tswapreg(arm_get_xreg((CPUARMState *)env, i));
     }
-    (*regs)[32] = tswapreg(cpu_get_recent_pc(env));
+    (*regs)[32] = tswapreg(cpu_get_recent_pc((CPUARMState *)env));
 #else
     for (i = 0; i < 32; i++) {
         (*regs)[i] = tswapreg(env->xregs[i]);
