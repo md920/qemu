@@ -95,7 +95,7 @@ cheri_uintptr(const cap_register_t *cap)
 }
 
 cap_register_t *
-cheri_load(cap_register_t *cap, const abi_uintcap_t *value)
+cheri_load(cap_register_t *cap, target_ulong *value)
 {
     uint64_t cursor, pesbt;
 

@@ -37,7 +37,11 @@ static inline void cpu_set_tls(CPUARMState *env, target_ulong newtls)
     /* Note that AArch64 Linux keeps the TLS pointer in TPIDR; this is
      * different from AArch32 Linux, which uses TPIDRRO.
      */
-    env->cp15.tpidr_el[0] = newtls;
+#ifdef TARGET_CHERI
+    cheri_load(&env->cp15.tpidr_el[0].cap, &newtls);
+#else
+    set_aarch_reg_to_x(&env->cp15.tpidr_el[0], newtls);
+#endif
 }
 
 static inline abi_ulong get_sp_from_cpustate(CPUARMState *state)

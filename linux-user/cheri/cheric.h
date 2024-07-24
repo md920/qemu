@@ -50,7 +50,7 @@ cap_register_t    *cheri_ptr(const void *ptr, size_t len);
 cap_register_t    *cheri_ptr_to_unbounded_cap(const void *ptr);
 abi_uintptr_t      cheri_uintptr(const cap_register_t *cap);
 
-cap_register_t    *cheri_load(cap_register_t *cap, const abi_uintcap_t *value);
+cap_register_t    *cheri_load(cap_register_t *cap, target_ulong *value);
 void               cheri_store(void *ptr, const cap_register_t *cap);
 
 /*
