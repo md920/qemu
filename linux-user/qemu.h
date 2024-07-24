@@ -1,8 +1,12 @@
 #ifndef QEMU_H
 #define QEMU_H
 
-#include "hostdep.h"
+#include "qemu/osdep.h"
 #include "cpu.h"
+#ifdef TARGET_CHERI
+#include "linux-user/cheri/cheric.h"
+#include "target/arm/cpu.h"
+#endif
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
 
@@ -11,10 +15,11 @@
 #endif /* DEBUG_REMAP */
 
 #include "exec/user/abitypes.h"
-
+#include "target_cpu.h"
 #include "exec/user/thunk.h"
 #include "syscall_defs.h"
 #include "target_syscall.h"
+#include "hostdep.h"
 #include "exec/gdbstub.h"
 
 /* This is the size of the host kernel's sigset_t, needed where we make

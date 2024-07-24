@@ -175,11 +175,7 @@ void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)
     for (i = 0; i < 31; i++) {
         arm_set_xreg(env, i, regs->regs[i]);
     }
-#ifdef TARGET_CHERI
-    cheri_prepare_pcc((cap_register_t*)&regs->pc, env);
-#else
-    env->pc = regs->pc;
-#endif
+    arm_update_pc(env, regs->pc, false);
     arm_set_xreg(env, 31, regs->sp);
 #ifdef TARGET_WORDS_BIGENDIAN
     env->cp15.sctlr_el[1] |= SCTLR_E0E;
