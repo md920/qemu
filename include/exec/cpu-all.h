@@ -247,7 +247,8 @@ extern TargetPageBits target_page;
 #define TARGET_PAGE_MASK   ((target_long)-1 << TARGET_PAGE_BITS)
 #endif
 
-#define TARGET_PAGE_ALIGN(addr) ROUND_UP((addr), TARGET_PAGE_SIZE)
+#define TARGET_PAGE_ALIGN(addr) QEMU_ALIGN_UP((addr), TARGET_PAGE_SIZE)
+#define TARGET_PAGE_ALIGN_DOWN(addr) QEMU_ALIGN_DOWN(addr, TARGET_PAGE_SIZE)
 
 /* Using intptr_t ensures that qemu_*_page_mask is sign-extended even
  * when intptr_t is 32-bit and we are aligning a long long.
