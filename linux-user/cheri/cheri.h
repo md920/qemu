@@ -39,10 +39,8 @@
 /*
  * Functions to construct userspace capabilities.
  */
-cap_register_t *cheri_capability_build_user_code(cap_register_t *cap,
-    uint32_t perms, abi_ulong basep, size_t length, off_t off);
-cap_register_t *cheri_capability_build_user_rwx(cap_register_t *cap,
-    uint32_t perms, abi_ulong basep, size_t length, off_t off);
+cap_register_t *cheri_build_user_cap_inexact_bounds(unsigned long addr, size_t len, uint32_t perms);
+bool cheri_check_cap(const cap_register_t * cap, size_t len, uint32_t perms);
 
 /*
  * Global capabilities used to construct other capabilities.
@@ -51,16 +49,5 @@ cap_register_t *cheri_capability_build_user_rwx(cap_register_t *cap,
 /* Root of all unsealed userspace capabilities. */
 extern cap_register_t userspace_cap;
 extern cap_register_t userspace_sealcap;
-
-/*
- * Functions to create capabilities used in exec.
- */
-cap_register_t *cheri_auxv_capability(cap_register_t *cap);
-cap_register_t *cheri_exec_pcc(cap_register_t *cap, struct image_info *info);
-cap_register_t *cheri_exec_stack_pointer(cap_register_t *cap, abi_ulong stack);
-void cheri_set_mmap_capability(cap_register_t *mmapcapp,
-    struct image_info *info, const cap_register_t *csp);
-cap_register_t *cheri_sigcode_capability(cap_register_t *cap,
-    struct image_info *info);
 
 #endif /* _CHERI_CHERI_H_ */

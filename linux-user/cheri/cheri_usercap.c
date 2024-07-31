@@ -29,66 +29,65 @@
  */
 
 /*
- * This file is a port of sys/cheri/cheri_usercap.c from CTSRD-CHERI/CheriBSD.
+ * This file is a port of lib/cheri.c from LINUX-MORELLO
  */
 
 #include "qemu.h"
 
 #include "cheri/cheric.h"
 #include "cheri/cheri.h"
-#include "cheri/cherireg.h"
-
-#include "machine/cherireg.h"
 
 cap_register_t userspace_cap;
 cap_register_t userspace_sealcap;
 
 /*
  * Build a new userspace capability derived from userspace_cap.
- * The resulting capability may include both read and execute permissions,
- * but not write, and will be a sentry capability. For architectures that use
- * flags, the flags for the resulting capability will be set based on what is
- * expected by userspace for the specified thread.
+ * 
  */
-cap_register_t *
-cheri_capability_build_user_code(cap_register_t *cap, uint32_t perms,
-    abi_ulong basep, size_t length, off_t off)
+static cap_register_t *
+build_user_cap(unsigned long addr, size_t len, uint32_t perms)
 {
 
-    assert((perms & ~CHERI_CAP_USER_CODE_PERMS) == 0);
+    cap_register_t *ret;
+    *ret = userspace_cap;
+    uint32_t root_perms = cheri_getperm(ret);
+    
+    ret = cheri_andperm(ret, perms);
+	ret = cheri_setaddress(ret, addr);
+    ret = cheri_setbounds(ret, len);
 
-    cap = cheri_capability_build_user_rwx(cap,
-        perms & CHERI_CAP_USER_CODE_PERMS, basep, length, off);
-#ifdef CHERI_FLAGS_CAP_MODE
-    /* XXXKW: Check the current thread for SV_CHERI. */
-    cap = cheri_setflags(cap, CHERI_FLAGS_CAP_MODE);
-#endif
-
-#ifdef TARGET_AARCH64
-    return (cheri_sealentry(cap));
-#else
-    /* XXXKW: Seal the capability. */
-    return (cap);
-#endif
+    return ret;
 }
 
 /*
- * Build a new userspace capability derived from userspace_cap.
- * The resulting capability may include read, write, and execute permissions.
+ * Create a userspace capability allowing bounds to be enlarged
  *
- * This function violates W^X and its use is discouraged and the reason for
- * use should be documented in a comment when it is used.
  */
 cap_register_t *
-cheri_capability_build_user_rwx(cap_register_t *cap, uint32_t perms,
-    abi_ulong basep, size_t length, off_t off)
+cheri_build_user_cap_inexact_bounds(unsigned long addr, size_t len,
+				    uint32_t perms)
 {
+	return build_user_cap(addr, len, perms);
+}
 
-    *cap = userspace_cap;
-    cap = cheri_setoffset(cheri_andperm(cheri_setbounds(
-        cheri_setoffset(cap, basep), length), perms), off);
+/*
+ * Checks whether a capability gives access to a given range of addresses and has the
+ * requested permissions.
+ */
+bool cheri_check_cap(const cap_register_t * cap, size_t len,
+		     uint32_t perms)
+{
+	unsigned long addr = cheri_getaddress(cap);
+	unsigned long base = cheri_getbase(cap);
 
-    assert(cheri_getlen(cap) == length);
+	if (!cheri_gettag(cap) || cap_is_sealed_entry(cap))
+		return false;
 
-    return (cap);
+	if (addr < base || addr > base + cheri_getlen(cap) - len)
+		return false;
+
+	if (perms & ~cheri_getperm(cap))
+		return false;
+
+	return true;
 }
