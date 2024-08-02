@@ -30,11 +30,18 @@
  */
 
 /*
- * This file is a port of sys/cheri/cheri.h from CTSRD-CHERI/CheriBSD.
+ * This file is a port of include/linux/cheri.h.
  */
 
 #ifndef _CHERI_CHERI_H_
 #define	_CHERI_CHERI_H_
+/*
+ * Standard permission sets for new capabilities. Can be overridden by
+ * architectures to add arch-specific permissions.
+ */
+#define CHERI_PERMS_HI_BIT 127
+#define CHERI_PERMS_LO_BIT 110
+#define CHERI_PERMS_NUM_BITS (CHERI_PERMS_HI_BIT - CHERI_PERMS_LO_BIT + 1)
 
 /*
  * Functions to construct userspace capabilities.
@@ -49,5 +56,6 @@ bool cheri_check_cap(const cap_register_t * cap, size_t len, uint32_t perms);
 /* Root of all unsealed userspace capabilities. */
 extern cap_register_t userspace_cap;
 extern cap_register_t userspace_sealcap;
+extern cap_register_t userspace_allpermscap;
 
 #endif /* _CHERI_CHERI_H_ */

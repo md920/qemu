@@ -34,28 +34,9 @@
 
 #include "cheri-archspecific.h"
 
-#include "machine/vmparam.h"
 #include "machine/cheri.h"
-
-#include "cheri/cherireg.h"
 #include "cheri/cheri.h"
 #include "cheri/cheric.h"
-
-void
-cheri_init_capabilities(const cap_register_t *kroot)
-{
-
-    userspace_cap = *kroot;
-    (void)cheri_setaddress(&userspace_cap, CHERI_CAP_USER_DATA_BASE);
-    (void)cheri_setbounds(&userspace_cap, CHERI_CAP_USER_DATA_LENGTH);
-    (void)cheri_andperm(&userspace_cap, CHERI_CAP_USER_DATA_PERMS |
-        CHERI_CAP_USER_CODE_PERMS | CHERI_PERM_CHERIABI_VMMAP);
-
-    userspace_sealcap = *kroot;
-    (void)cheri_setaddress(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_BASE);
-    (void)cheri_setbounds(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_LENGTH);
-    (void)cheri_andperm(&userspace_sealcap, CHERI_SEALCAP_USERSPACE_PERMS);
-}
 
 void
 cheri_prepare_pcc(cap_register_t *pcc, CPUARMState *env)

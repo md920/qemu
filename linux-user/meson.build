@@ -28,6 +28,7 @@ linux_user_ss.add(when: 'TARGET_CHERI', if_true: files(
 
 linux_user_ss.add(when: ['TARGET_AARCH64', 'TARGET_CHERI'], if_true: files(
   'aarch64/cheri/cheri_machdep.c',
+  'aarch64/cheri/morello.c',
 ))
 
 syscall_nr_generators = {}

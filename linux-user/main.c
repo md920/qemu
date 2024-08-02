@@ -48,6 +48,13 @@
 #include "cpu_loop-common.h"
 #include "crypto/init.h"
 
+#ifdef TARGET_CHERI
+#include "cheri/cheric.h"
+#include "cheri/cheri.h"
+
+#include "machine/cheri.h"
+#endif
+
 char *exec_path;
 
 int singlestep;
@@ -801,6 +808,11 @@ int main(int argc, char **argv, char **envp)
 
     ts = g_new0(TaskState, 1);
     init_task_state(ts);
+
+#ifdef TARGET_CHERI
+    morello_init_capabilities(env);
+#endif
+
     /* build Task State */
     ts->info = info;
     ts->bprm = &bprm;

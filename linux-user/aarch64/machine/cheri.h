@@ -30,18 +30,33 @@
  * $FreeBSD$
  */
 
-/*
- * This file is a port of sys/arm64/include/cheri.h from CTSRD-CHERI/CheriBSD.
- */
-
 #ifndef _MACHINE_CHERI_H_
 #define _MACHINE_CHERI_H_
+
+#ifndef CAP_PERMS_READ
+#define CAP_PERMS_READ \
+	(CAP_PERM_LOAD | CAP_PERM_LOAD_CAP)
+#endif
+
+#ifndef CAP_PERMS_WRITE
+#define CAP_PERMS_WRITE \
+	(CAP_PERM_STORE | CAP_PERM_STORE_CAP | CAP_PERM_STORE_LOCAL)
+#endif
+
+#ifndef CAP_PERMS_EXEC
+#define CAP_PERMS_EXEC \
+	(CAP_PERM_EXECUTE | CAP_PERM_SYSTEM)
+#endif
+
+#ifndef CAP_PERMS_ROOTCAP
+#define CAP_PERMS_ROOTCAP \
+	(CAP_PERM_GLOBAL | CAP_PERM_SW_VMEM)
+#endif
 
 /*
  * Morello-specific kernel utility functions.
  */
-void cheri_init_capabilities(const cap_register_t *kroot);
-int  cheri_esr_to_sicode(uint64_t esr);
+void morello_init_capabilities(CPUARMState *env);
 
 /*
  * Morello-specific QEMU utility functions.
