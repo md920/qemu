@@ -6,6 +6,7 @@
 #ifdef TARGET_CHERI
 #include "linux-user/cheri/cheric.h"
 #include "target/arm/cpu.h"
+#include "target/cheri-common/cheri-helper-utils.h"
 #endif
 #include "exec/exec-all.h"
 #include "exec/cpu_ldst.h"
@@ -22,6 +23,9 @@
 #include "hostdep.h"
 #include "exec/gdbstub.h"
 
+#define THREAD __thread
+#define THREAD_ENV()    ((CPUArchState *)thread_cpu->env_ptr)
+#define THREAD_STATE()  ((TaskState *)thread_cpu->opaque)
 /* This is the size of the host kernel's sigset_t, needed where we make
  * direct system calls that take a sigset_t pointer and a size.
  */
@@ -41,6 +45,10 @@ struct image_info {
         abi_ulong       start_brk;
         abi_ulong       brk;
         abi_ulong       reserve_brk;
+        abi_ulong       start_elf_rx;
+        abi_ulong       end_elf_rx;
+        abi_ulong       start_elf_rw;
+        abi_ulong       end_elf_rw;
         abi_ulong       start_mmap;
         abi_ulong       start_stack;
         abi_ulong       stack_limit;
@@ -582,6 +590,23 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
     __ret;								\
 })
 
+#ifdef TARGET_CHERI
+#define put_user_capability(tag, pesbt, cursor, gaddr)                  \
+({                                                                      \
+    abi_ulong __gaddr = (gaddr);                                        \
+    uint8_t *__hptr;                                                    \
+    abi_long __ret;                                                     \
+    if ((__hptr = lock_user(VERIFY_WRITE, __gaddr, CHERI_CAP_SIZE, 0))) { \
+        store_cap_memory_to_memory(THREAD_ENV(), REG_NONE, tag, pesbt,  \
+                                   cursor, __gaddr, GETPC());           \
+        __ret = 0;                                                      \
+        unlock_user(__hptr, __gaddr, CHERI_CAP_SIZE);                   \
+    } else                                                              \
+        __ret = -TARGET_EFAULT;                                         \
+    __ret;                                                              \
+})
+#endif
+
 #define get_user(x, gaddr, target_type)					\
 ({									\
     abi_ulong __gaddr = (gaddr);					\
@@ -608,6 +633,21 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define put_user_s16(x, gaddr) put_user((x), (gaddr), int16_t)
 #define put_user_u8(x, gaddr)  put_user((x), (gaddr), uint8_t)
 #define put_user_s8(x, gaddr)  put_user((x), (gaddr), int8_t)
+#ifdef TARGET_CHERI
+#define put_user_c(x, gaddr)                                            \
+        put_user_capability((x)->cr_tag != 0, CAP_cc(compress_mem)(x),  \
+                            (x)->_cr_cursor, gaddr)
+#define put_user_p(x, gaddr) put_user_c(x, gaddr)
+#else
+#define put_user_p(x, gaddr) put_user_ual(x, gaddr)
+#endif
+#ifdef TARGET_CHERI
+#define put_user_uintcap(x, gaddr)                                      \
+        put_user_capability(true, (x).pesbt, (x).cursor, gaddr)
+#define put_user_uintptr(x, gaddr) put_user_uintcap(x, gaddr)
+#else
+#define put_user_uintptr(x, gaddr) put_user_ual(x, gaddr)
+#endif
 
 #define get_user_ual(x, gaddr) get_user((x), (gaddr), abi_ulong)
 #define get_user_sal(x, gaddr) get_user((x), (gaddr), abi_long)
@@ -619,6 +659,32 @@ static inline int access_ok(int type, abi_ulong addr, abi_ulong size)
 #define get_user_s16(x, gaddr) get_user((x), (gaddr), int16_t)
 #define get_user_u8(x, gaddr)  get_user((x), (gaddr), uint8_t)
 #define get_user_s8(x, gaddr)  get_user((x), (gaddr), int8_t)
+#ifdef TARGET_CHERI
+#define get_user_uintcap(x, gaddr)                                      \
+({                                                                      \
+    abi_ulong __gaddr = (gaddr);                                        \
+    uint8_t *__hptr;                                                    \
+    abi_long __ret;                                                     \
+    if ((__hptr = lock_user(VERIFY_READ, __gaddr, CHERI_CAP_SIZE, 1))) { \
+        __ret = __get_user((x).cursor, (uint64_t *)(__hptr +            \
+            CHERI_MEM_OFFSET_CURSOR));                                  \
+        if (__ret == 0) {                                               \
+            __ret = __get_user((x).pesbt, (uint64_t *)(__hptr +         \
+                CHERI_MEM_OFFSET_METADATA));                            \
+        }                                                               \
+        unlock_user(__hptr, __gaddr, 0);                                \
+    } else {                                                            \
+        /* avoid warning */                                             \
+        (x).cursor = 0;                                                 \
+        (x).pesbt = 0;                                                  \
+        __ret = -TARGET_EFAULT;                                         \
+    }                                                                   \
+    __ret;                                                              \
+})
+#define get_user_uintptr(x, gaddr)  get_user_uintcap(x, gaddr)
+#else
+#define get_user_uintptr(x, gaddr)  get_user_ual((x), (gaddr))
+#endif
 
 /* copy_from_user() and copy_to_user() are usually used to copy data
  * buffers between the target and host.  These internally perform

@@ -15,6 +15,7 @@
 #include "qapi/error.h"
 #ifdef TARGET_CHERI
     #include "aarch64/machine/cheri.h"
+    #include "cheri/cheri.h"
     #include "target/arm/cpu.h"
 #endif
 
@@ -541,11 +542,6 @@ static void elf_core_copy_regs(target_elf_gregset_t *regs,
         (*regs)[i] = tswapreg(arm_get_xreg((CPUARMState *)env, i));
     }
     (*regs)[32] = tswapreg(cpu_get_recent_pc((CPUARMState *)env));
-#else
-    for (i = 0; i < 32; i++) {
-        (*regs)[i] = tswapreg(env->xregs[i]);
-    }
-    (*regs)[32] = tswapreg(env->pc);
 #endif
     (*regs)[33] = tswapreg(pstate_read((CPUARMState *)env));
 }
@@ -1915,20 +1911,87 @@ static abi_ulong loader_build_fdpic_loadmap(struct image_info *info, abi_ulong s
     return sp;
 }
 
+#ifdef TARGET_CHERI
+static cap_register_t *make_ro_at_from_addr(unsigned long addr, size_t len)
+{
+    cap_register_t *cap;
+    uint32_t perms;
+
+	perms = CAP_PERM_GLOBAL | CAP_PERM_LOAD;
+	cap = cheri_build_user_cap_inexact_bounds(addr, len, perms);
+
+    return cap;
+}
+
+static cap_register_t *make_ro_at_from_uptr(abi_ulong *ptr)
+{
+    uint32_t perms = CAP_PERM_GLOBAL | CAP_PERM_LOAD;
+
+    return cheri_andperm((cap_register_t *)ptr, perms);
+}
+
+static cap_register_t *make_at_entry(const struct image_info *load_info)
+{
+    cap_register_t *cap;
+    size_t len;
+    uint32_t perms;
+	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
+	perms = CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_EXEC;
+
+	cap = cheri_build_user_cap_inexact_bounds(load_info->start_elf_rx,
+						  len, perms);
+	cap = cheri_setaddress(cap, load_info->entry);
+	cap = cheri_sealentry(cap);
+
+    return cap;
+}
+
+static cap_register_t *make_user_pcc(const struct image_info *load_info)
+{
+    cap_register_t *pcc;
+    size_t len;
+    uint32_t perms;
+
+	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
+	perms = CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_EXEC;
+
+	pcc = cheri_build_user_cap_inexact_bounds(load_info->start_elf_rx,
+						  len, perms);
+	pcc = cheri_setaddress(pcc, load_info->entry);
+
+	return pcc;
+}
+#else
+static abi_ulong make_ro_at_from_addr(unsigned long addr, size_t len)
+{
+    return addr;
+}
+
+static abi_ulong make_ro_at_from_uptr(abi_ulong *ptr)
+{
+    return (abi_ulong)*ptr;
+}
+
+static abi_ulong make_at_entry(const struct image_info *load_info)
+{
+    return load_info->entry;
+}
+#endif
+
 static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
                                    struct elfhdr *exec,
                                    struct image_info *info,
                                    struct image_info *interp_info)
 {
     abi_ulong sp;
-    abi_ulong u_argc, u_argv, u_envp, u_auxv;
+    target_ulong u_argc, u_argv, u_envp, u_auxv;
     int size;
     int i;
     abi_ulong u_rand_bytes;
     uint8_t k_rand_bytes[16];
     abi_ulong u_platform;
     const char *k_platform;
-    const int n = sizeof(elf_addr_t);
+    const int n = ABI_PTR_SIZE;
 
     sp = p;
 
@@ -2028,6 +2091,11 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
         put_user_ual(val, u_auxv); u_auxv += n; \
     } while(0)
 
+#define NEW_AUX_ENT_PTR(id, val) do {           \
+        put_user_ual(id, u_auxv);  u_auxv += n; \
+        put_user_p(val, u_auxv); u_auxv += n; \
+    } while(0)
+
 #ifdef ARCH_DLINFO
     /*
      * ARCH_DLINFO must come first so platform specific code can enforce
@@ -2038,7 +2106,8 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
     /* There must be exactly DLINFO_ITEMS entries here, or the assert
      * on info->auxv_len will trigger.
      */
-    NEW_AUX_ENT(AT_PHDR, (abi_ulong)(info->load_addr + exec->e_phoff));
+    NEW_AUX_ENT_PTR(AT_PHDR, make_ro_at_from_addr(info->load_addr + exec->e_phoff,
+                    exec->e_phnum * sizeof(struct elf_phdr)));
     NEW_AUX_ENT(AT_PHENT, (abi_ulong)(sizeof (struct elf_phdr)));
     NEW_AUX_ENT(AT_PHNUM, (abi_ulong)(exec->e_phnum));
     if ((info->alignment & ~qemu_host_page_mask) != 0) {
@@ -2050,14 +2119,14 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
     }
     NEW_AUX_ENT(AT_BASE, (abi_ulong)(interp_info ? interp_info->load_addr : 0));
     NEW_AUX_ENT(AT_FLAGS, (abi_ulong)0);
-    NEW_AUX_ENT(AT_ENTRY, info->entry);
+    NEW_AUX_ENT_PTR(AT_ENTRY, make_at_entry(info));
     NEW_AUX_ENT(AT_UID, (abi_ulong) getuid());
     NEW_AUX_ENT(AT_EUID, (abi_ulong) geteuid());
     NEW_AUX_ENT(AT_GID, (abi_ulong) getgid());
     NEW_AUX_ENT(AT_EGID, (abi_ulong) getegid());
     NEW_AUX_ENT(AT_HWCAP, (abi_ulong) ELF_HWCAP);
     NEW_AUX_ENT(AT_CLKTCK, (abi_ulong) sysconf(_SC_CLK_TCK));
-    NEW_AUX_ENT(AT_RANDOM, (abi_ulong) u_rand_bytes);
+    NEW_AUX_ENT_PTR(AT_RANDOM, make_ro_at_from_uptr(&u_rand_bytes));
     NEW_AUX_ENT(AT_SECURE, (abi_ulong) qemu_getauxval(AT_SECURE));
     NEW_AUX_ENT(AT_EXECFN, info->file_string);
 
@@ -2066,7 +2135,7 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
 #endif
 
     if (u_platform) {
-        NEW_AUX_ENT(AT_PLATFORM, u_platform);
+        NEW_AUX_ENT_PTR(AT_PLATFORM, make_ro_at_from_uptr(&u_platform));
     }
     NEW_AUX_ENT (AT_NULL, 0);
 #undef NEW_AUX_ENT

@@ -348,6 +348,14 @@ typedef struct mips_elf_abiflags_v0 {
 #define AT_L2_CACHESHAPE  36	/*   bits 4-7: log2 of line size.  */
 #define AT_L3_CACHESHAPE  37	/*   val&~255: cache size.  */
 
+#define AT_CHERI_EXEC_RW_CAP	60
+#define AT_CHERI_EXEC_RX_CAP	61
+#define AT_CHERI_INTERP_RW_CAP	62
+#define AT_CHERI_INTERP_RX_CAP	63
+#define AT_CHERI_STACK_CAP	64
+#define AT_CHERI_SEAL_CAP	65
+#define AT_CHERI_CID_CAP	66
+
 typedef struct dynamic{
   Elf32_Sword d_tag;
   union{
