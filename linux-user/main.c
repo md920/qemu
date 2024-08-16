@@ -49,6 +49,8 @@
 #include "crypto/init.h"
 
 #ifdef TARGET_CHERI
+#include "cheri_tagtree.h"
+
 #include "cheri/cheric.h"
 #include "cheri/cheri.h"
 
@@ -628,6 +630,9 @@ int main(int argc, char **argv, char **envp)
     TaskState *ts;
     CPUArchState *env;
     CPUState *cpu;
+#ifdef TARGET_CHERI
+    int ii;
+#endif
     int optind;
     char **target_environ, **wrk;
     char **target_argv;
@@ -683,7 +688,7 @@ int main(int argc, char **argv, char **envp)
     }
 
     /* Zero out regs */
-    memset(regs, 0, sizeof(struct target_pt_regs));
+    memset(regs, 0, sizeof(*regs));
 
     /* Zero out image_info */
     memset(info, 0, sizeof(struct image_info));
@@ -810,6 +815,10 @@ int main(int argc, char **argv, char **envp)
     init_task_state(ts);
 
 #ifdef TARGET_CHERI
+    cheri_tagtree_init();
+    for (ii = 0; ii < 32; ii++) {
+        regs->regs[ii] = *cheri_get_ddc(env);
+    }
     morello_init_capabilities(env);
 #endif
 

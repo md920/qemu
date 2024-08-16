@@ -87,10 +87,6 @@ void cpu_loop(CPUARMState *env)
         trapnr = cpu_exec(cs);
         cpu_exec_end(cs);
         process_queued_cpu_work(cs);
-#ifdef TARGET_CHERI
-        pstate_write(env, pstate_read(env) | PSTATE_C64);
-        arm_rebuild_chflags(env);
-#endif
 
         switch (trapnr) {
         case EXCP_SWI:            
@@ -172,11 +168,23 @@ void target_cpu_copy_regs(CPUArchState *env, struct target_pt_regs *regs)
                 "The selected ARM CPU does not support 64 bit mode\n");
         exit(EXIT_FAILURE);
     }
+#ifdef TARGET_CHERI
+    pstate_write(env, pstate_read(env) | PSTATE_C64);
+    arm_rebuild_chflags(env);
+
     for (i = 0; i < 31; i++) {
-        arm_set_xreg(env, i, regs->regs[i]);
+        update_capreg(env, i, &regs->regs[i]);
     }
-    arm_update_pc(env, regs->pc, false);
-    arm_set_xreg(env, 31, regs->sp);
+
+    cheri_prepare_pcc(&regs->pc, env);
+    update_capreg(env, 31, &regs->sp);
+#else
+    for (i = 0; i < 31; i++) {
+        env->xregs[i] = regs->regs[i];
+    }
+    env->pc = regs->pc;
+    env->xregs[31] = regs->sp;
+#endif
 #ifdef TARGET_WORDS_BIGENDIAN
     env->cp15.sctlr_el[1] |= SCTLR_E0E;
     for (i = 1; i < 4; ++i) {

@@ -21,6 +21,16 @@
 #include "exec/log.h"
 #include "qemu.h"
 
+#ifdef TARGET_CHERI
+#include "exec/ramblock.h"
+#include "target/cheri-common/cheri_usermem.h"
+#endif
+
+#ifdef TARGET_CHERI
+#include "cheri/cheric.h"
+#include "cheri/cheri.h"
+#endif
+
 static pthread_mutex_t mmap_mutex = PTHREAD_MUTEX_INITIALIZER;
 static __thread int mmap_lock_count;
 
@@ -606,6 +616,10 @@ abi_long target_mmap(abi_ulong start, abi_ulong len, int target_prot,
         log_page_dump(__func__);
     }
     tb_invalidate_phys_range(start, start + len);
+#ifdef TARGET_CHERI
+    qemu_ram_clear_region(len, g2h(start));
+    (void)qemu_ram_alloc_from_ptr(len, g2h((void *)(uintptr_t)start));
+#endif
     mmap_unlock();
     return start;
 fail:
