@@ -46,7 +46,7 @@
 /*
  * Functions to construct userspace capabilities.
  */
-cap_register_t *cheri_build_user_cap_inexact_bounds(unsigned long addr, size_t len, uint32_t perms);
+cap_register_t *cheri_build_user_cap_inexact_bounds(cap_register_t *cap, unsigned long addr, size_t len, uint32_t perms);
 bool cheri_check_cap(const cap_register_t * cap, size_t len, uint32_t perms);
 
 /*
@@ -56,6 +56,7 @@ bool cheri_check_cap(const cap_register_t * cap, size_t len, uint32_t perms);
 /* Root of all unsealed userspace capabilities. */
 extern cap_register_t userspace_cap;
 extern cap_register_t userspace_sealcap;
+extern cap_register_t userspace_cid_cap;
 extern cap_register_t userspace_allpermscap;
 
 #endif /* _CHERI_CHERI_H_ */

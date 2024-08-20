@@ -39,16 +39,17 @@
 
 cap_register_t userspace_cap;
 cap_register_t userspace_sealcap;
+cap_register_t userspace_cid_cap;
 cap_register_t userspace_allpermscap;
 /*
  * Build a new userspace capability derived from userspace_cap.
  * 
  */
 static cap_register_t *
-build_user_cap(unsigned long addr, size_t len, uint32_t perms)
+build_user_cap(cap_register_t *ret, unsigned long addr, size_t len, uint32_t perms)
 {
 
-    cap_register_t *ret = (cap_register_t *)&userspace_cap;
+    *ret = userspace_cap;
     uint32_t root_perms = cheri_getperm(ret);
     
     ret = cheri_andperm(ret, perms);
@@ -63,10 +64,10 @@ build_user_cap(unsigned long addr, size_t len, uint32_t perms)
  *
  */
 cap_register_t *
-cheri_build_user_cap_inexact_bounds(unsigned long addr, size_t len,
+cheri_build_user_cap_inexact_bounds(cap_register_t *cap, unsigned long addr, size_t len,
 				    uint32_t perms)
 {
-	return build_user_cap(addr, len, perms);
+	return build_user_cap(cap, addr, len, perms);
 }
 
 /*

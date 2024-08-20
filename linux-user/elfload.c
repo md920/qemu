@@ -524,7 +524,6 @@ static inline void init_thread(struct target_pt_regs *regs,
 {
     abi_long stack = infop->start_stack;
     abi_ulong entry = infop->entry & ~0x3ULL;
-    memset(regs, 0, sizeof(*regs));
 
 #ifdef TARGET_CHERI
     morello_thread_start(regs, entry, infop);
@@ -1917,15 +1916,28 @@ static abi_ulong loader_build_fdpic_loadmap(struct image_info *info, abi_ulong s
 }
 
 #ifdef TARGET_CHERI
+static cap_register_t *make_user_sp(struct image_info *bprm, unsigned long p)
+{
+    cap_register_t *sp;
+    static cap_register_t cap; 
+    sp = cheri_build_user_cap_inexact_bounds(&cap, p, TARGET_PAGE_SIZE, CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_WRITE);
+
+    //sp = cheri_andperm(sp, CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_WRITE);
+    //sp = cheri_setaddress(sp, p);
+
+    return sp;
+}
+
 static cap_register_t *make_ro_at_from_addr(unsigned long addr, size_t len)
 {
-    cap_register_t *cap;
+    cap_register_t *ptr;
+    static cap_register_t cap;
     uint32_t perms;
 
 	perms = CAP_PERM_GLOBAL | CAP_PERM_LOAD;
-	cap = cheri_build_user_cap_inexact_bounds(addr, len, perms);
+	ptr = cheri_build_user_cap_inexact_bounds(&cap, addr, len, perms);
 
-    return cap;
+    return ptr;
 }
 
 static cap_register_t *make_ro_at_from_uptr(abi_ulong *ptr)
@@ -1937,30 +1949,32 @@ static cap_register_t *make_ro_at_from_uptr(abi_ulong *ptr)
 
 static cap_register_t *make_at_entry(const struct image_info *load_info)
 {
-    cap_register_t *cap;
+    cap_register_t *ptr;
+    static cap_register_t cap;
     size_t len;
     uint32_t perms;
 	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
 	perms = CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_EXEC;
 
-	cap = cheri_build_user_cap_inexact_bounds(load_info->start_elf_rx,
+	ptr = cheri_build_user_cap_inexact_bounds(&cap, load_info->start_elf_rx,
 						  len, perms);
-	cap = cheri_setaddress(cap, load_info->entry);
-	//cap = cheri_sealentry(cap);
+	ptr = cheri_setaddress(ptr, load_info->entry);
+	//ptr = cheri_sealentry(ptr);
 
-    return cap;
+    return ptr;
 }
 
 static cap_register_t *make_user_pcc(const struct image_info *load_info)
 {
     cap_register_t *pcc;
+    static cap_register_t cap;
     size_t len;
     uint32_t perms;
 
 	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
 	perms = CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_EXEC;
 
-	pcc = cheri_build_user_cap_inexact_bounds(load_info->start_elf_rx,
+	pcc = cheri_build_user_cap_inexact_bounds(&cap, load_info->start_elf_rx,
 						  len, perms);
 	pcc = cheri_setaddress(pcc, load_info->entry);
 
@@ -1969,6 +1983,7 @@ static cap_register_t *make_user_pcc(const struct image_info *load_info)
 
 static cap_register_t *make_elf_rw_cap(const struct image_info *load_info)
 {
+    static cap_register_t cap;
     unsigned long start_addr;
     size_t len;
     uint32_t perms;
@@ -1985,19 +2000,20 @@ static cap_register_t *make_elf_rw_cap(const struct image_info *load_info)
 	perms = CAP_PERMS_ROOTCAP | CAP_PERMS_READ | CAP_PERMS_WRITE;
 	perms |= CAP_PERM_BRANCH_SEALED_PAIR;
 	
-    return cheri_build_user_cap_inexact_bounds(start_addr, len, perms);
+    return cheri_build_user_cap_inexact_bounds(&cap, start_addr, len, perms);
 }
 
 static cap_register_t *make_elf_rx_cap(const struct image_info *load_info)
 {
-	size_t len;
+	static cap_register_t cap;
+    size_t len;
 	uint32_t perms;
 
 	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
 	perms = CAP_PERMS_ROOTCAP | CAP_PERMS_READ | CAP_PERMS_EXEC;
 	perms |= CAP_PERM_BRANCH_SEALED_PAIR;
 
-	return cheri_build_user_cap_inexact_bounds(load_info->start_elf_rx,
+	return cheri_build_user_cap_inexact_bounds(&cap, load_info->start_elf_rx,
 						   len, perms);
 }
 
@@ -2005,6 +2021,7 @@ static void set_bprm_stack_caps(struct image_info *bprm, cap_register_t *sp,
 				int auxv_size)
 {
 	cap_register_t *p;
+    static cap_register_t cap;
 	size_t len;
 
 	bprm->pcuabi.csp = sp;
@@ -2016,15 +2033,16 @@ static void set_bprm_stack_caps(struct image_info *bprm, cap_register_t *sp,
 	 * such a situation. This should be easily done once they are moved out
 	 * of the stack, as per the PCuABI specification.
 	 */
-	p = sp + ABI_PTR_SIZE;
+	cap = *cheri_incoffset(sp, ABI_PTR_SIZE);
 	len = (bprm->argc + 1) * ABI_PTR_SIZE;
+    p = &cap;
 	bprm->pcuabi.argv = cheri_setbounds(p, len);
 
-	p += len;
+	p = cheri_incoffset(p, len);
 	len = (bprm->envc + 1) * ABI_PTR_SIZE;
 	bprm->pcuabi.envp = cheri_setbounds(p, len);
 
-	p += len;
+	p = cheri_incoffset(p, len);
 	len = auxv_size * ABI_PTR_SIZE;
 	bprm->pcuabi.auxv = cheri_setbounds(p, len);
 }
@@ -2052,6 +2070,9 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
                                    struct image_info *interp_info)
 {
     abi_ulong sp;
+#ifdef TARGET_CHERI
+    cap_register_t *csp;
+#endif
     target_ulong u_argc, u_argv, u_envp, u_auxv;
     int size;
     int i;
@@ -2144,6 +2165,10 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
         sp = QEMU_ALIGN_UP(sp + size, STACK_ALIGNMENT);
     }
 
+#ifdef TARGET_CHERI
+    csp = make_user_sp(info, sp); 
+#endif
+
     u_argv = u_argc + n;
     u_envp = u_argv + (argc + 1) * n;
     u_auxv = u_envp + (envc + 1) * n;
@@ -2211,7 +2236,7 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
      * we actually put into it.
      */
     assert(info->auxv_len == u_auxv - info->saved_auxv);
-    
+
 #ifdef TARGET_CHERI
     NEW_AUX_ENT_PTR(AT_CHERI_EXEC_RW_CAP, make_elf_rw_cap(info));
     NEW_AUX_ENT_PTR(AT_CHERI_EXEC_RX_CAP, make_elf_rx_cap(info));
@@ -2222,9 +2247,16 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
     } else {
 		info->pcuabi.pcc = make_user_pcc(info);
     }
+	NEW_AUX_ENT(AT_ARGC, argc);
+	NEW_AUX_ENT(AT_ARGV, 0);
+	NEW_AUX_ENT(AT_ENVC, envc);
+	NEW_AUX_ENT(AT_ENVP, 0);
 #endif
 #undef NEW_AUX_ENT
+#ifdef TARGET_CHERI
 #undef NEW_AUX_ENT_PTR
+    set_bprm_stack_caps(info, csp, info->auxv_len);
+#endif
 
     put_user_ual(argc, u_argc);
 
