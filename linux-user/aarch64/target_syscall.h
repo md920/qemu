@@ -2,9 +2,15 @@
 #define AARCH64_TARGET_SYSCALL_H
 
 struct target_pt_regs {
-    uint64_t        regs[31];
-    uint64_t        sp;
-    uint64_t        pc;
+#ifdef TARGET_CHERI
+    cap_register_t regs[31];
+    cap_register_t sp;
+    cap_register_t pc;
+#else
+    uint64_t    regs[31];
+    uint64_t    sp;
+    uint64_t    pc;
+#endif
     uint64_t        pstate;
 };
 

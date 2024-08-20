@@ -31,6 +31,17 @@
  */
 #define SIGSET_T_SIZE (_NSIG / 8)
 
+#ifdef TARGET_CHERI
+struct pcuabi_binprm {
+    cap_register_t *pcc;
+    cap_register_t *csp;
+	/* Capabilities to the initial arrays in the new process's address space */
+	cap_register_t *argv;
+	cap_register_t *envp;
+	cap_register_t *auxv;
+};
+#endif
+
 /* This struct is used to hold certain information about the image.
  * Basically, it replicates in user space what would be certain
  * task_struct fields in the kernel
@@ -81,6 +92,12 @@ struct image_info {
 #ifdef TARGET_MIPS
         int             fp_abi;
         int             interp_fp_abi;
+#endif
+
+#ifdef TARGET_CHERI
+        struct          pcuabi_binprm pcuabi;
+        int             argc;
+        int             envc;
 #endif
 };
 

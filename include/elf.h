@@ -336,10 +336,6 @@ typedef struct mips_elf_abiflags_v0 {
 #define AT_BASE_PLATFORM 24	/* string identifying real platforms */
 #define AT_RANDOM	25	/* address of 16 random bytes */
 #define AT_HWCAP2       26      /* extension of AT_HWCAP */
-#define AT_ARGC		28	/* Argument count */
-#define AT_ARGV		29	/* Argument vector */
-#define AT_ENVC		30	/* Environment count */
-#define AT_ENVV		31	/* Environment vector */
 #define AT_EXECFN	31	/* filename of the executable */
 #define AT_SYSINFO	32	/* address of kernel entry point */
 #define AT_SYSINFO_EHDR	33	/* address of kernel vdso */
@@ -355,6 +351,18 @@ typedef struct mips_elf_abiflags_v0 {
 #define AT_CHERI_STACK_CAP	64
 #define AT_CHERI_SEAL_CAP	65
 #define AT_CHERI_CID_CAP	66
+
+#if defined(CONFIG_LINUX_USER) && defined(TARGET_CHERI)
+#define AT_ARGC	80
+#define AT_ARGV	81
+#define AT_ENVC	82
+#define AT_ENVP	83
+#else
+#define AT_ARGC		28	/* Argument count */
+#define AT_ARGV		29	/* Argument vector */
+#define AT_ENVC		30	/* Environment count */
+#define AT_ENVV		31	/* Environment vector */
+#endif
 
 typedef struct dynamic{
   Elf32_Sword d_tag;

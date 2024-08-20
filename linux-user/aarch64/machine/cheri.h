@@ -57,6 +57,8 @@
  * Morello-specific kernel utility functions.
  */
 void morello_init_capabilities(CPUARMState *env);
+int morello_thread_start(struct target_pt_regs *regs, unsigned long pc, struct image_info *bprm);
+void morello_thread_set_csp(struct target_pt_regs *regs, cap_register_t sp);
 
 /*
  * Morello-specific QEMU utility functions.

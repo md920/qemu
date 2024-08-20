@@ -523,10 +523,15 @@ static inline void init_thread(struct target_pt_regs *regs,
                                struct image_info *infop)
 {
     abi_long stack = infop->start_stack;
+    abi_ulong entry = infop->entry & ~0x3ULL;
     memset(regs, 0, sizeof(*regs));
 
+#ifdef TARGET_CHERI
+    morello_thread_start(regs, entry, infop);
+#else
     regs->pc = infop->entry & ~0x3ULL;
     regs->sp = stack;
+#endif
 }
 
 #define ELF_NREG    34
@@ -1941,7 +1946,7 @@ static cap_register_t *make_at_entry(const struct image_info *load_info)
 	cap = cheri_build_user_cap_inexact_bounds(load_info->start_elf_rx,
 						  len, perms);
 	cap = cheri_setaddress(cap, load_info->entry);
-	cap = cheri_sealentry(cap);
+	//cap = cheri_sealentry(cap);
 
     return cap;
 }
@@ -1961,6 +1966,69 @@ static cap_register_t *make_user_pcc(const struct image_info *load_info)
 
 	return pcc;
 }
+
+static cap_register_t *make_elf_rw_cap(const struct image_info *load_info)
+{
+    unsigned long start_addr;
+    size_t len;
+    uint32_t perms;
+
+    if (load_info->start_elf_rw == ~0UL) {
+        return NULL;
+    }
+	/*
+	 * The RW region typically starts after the first segment, and the
+	 * offset may not be page-aligned.
+	 */
+	start_addr = TARGET_PAGE_ALIGN_DOWN(load_info->start_elf_rw);
+	len = TARGET_PAGE_ALIGN(load_info->end_elf_rw - start_addr);
+	perms = CAP_PERMS_ROOTCAP | CAP_PERMS_READ | CAP_PERMS_WRITE;
+	perms |= CAP_PERM_BRANCH_SEALED_PAIR;
+	
+    return cheri_build_user_cap_inexact_bounds(start_addr, len, perms);
+}
+
+static cap_register_t *make_elf_rx_cap(const struct image_info *load_info)
+{
+	size_t len;
+	uint32_t perms;
+
+	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
+	perms = CAP_PERMS_ROOTCAP | CAP_PERMS_READ | CAP_PERMS_EXEC;
+	perms |= CAP_PERM_BRANCH_SEALED_PAIR;
+
+	return cheri_build_user_cap_inexact_bounds(load_info->start_elf_rx,
+						   len, perms);
+}
+
+static void set_bprm_stack_caps(struct image_info *bprm, cap_register_t *sp,
+				int auxv_size)
+{
+	cap_register_t *p;
+	size_t len;
+
+	bprm->pcuabi.csp = sp;
+
+	/*
+	 * TODO [PCuABI] - argc and envc may be very large (up to
+	 * MAX_ARG_STRINGS), and as a result the bounds of argv/envp may not be
+	 * exact. Padding should ideally be introduced between the arrays in
+	 * such a situation. This should be easily done once they are moved out
+	 * of the stack, as per the PCuABI specification.
+	 */
+	p = sp + ABI_PTR_SIZE;
+	len = (bprm->argc + 1) * ABI_PTR_SIZE;
+	bprm->pcuabi.argv = cheri_setbounds(p, len);
+
+	p += len;
+	len = (bprm->envc + 1) * ABI_PTR_SIZE;
+	bprm->pcuabi.envp = cheri_setbounds(p, len);
+
+	p += len;
+	len = auxv_size * ABI_PTR_SIZE;
+	bprm->pcuabi.auxv = cheri_setbounds(p, len);
+}
+    
 #else
 static abi_ulong make_ro_at_from_addr(unsigned long addr, size_t len)
 {
@@ -2138,12 +2206,25 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
         NEW_AUX_ENT_PTR(AT_PLATFORM, make_ro_at_from_uptr(&u_platform));
     }
     NEW_AUX_ENT (AT_NULL, 0);
-#undef NEW_AUX_ENT
-
+    
     /* Check that our initial calculation of the auxv length matches how much
      * we actually put into it.
      */
     assert(info->auxv_len == u_auxv - info->saved_auxv);
+    
+#ifdef TARGET_CHERI
+    NEW_AUX_ENT_PTR(AT_CHERI_EXEC_RW_CAP, make_elf_rw_cap(info));
+    NEW_AUX_ENT_PTR(AT_CHERI_EXEC_RX_CAP, make_elf_rx_cap(info));
+    if (interp_info && interp_info->load_addr) {
+		NEW_AUX_ENT_PTR(AT_CHERI_INTERP_RW_CAP, make_elf_rw_cap(interp_info));
+		NEW_AUX_ENT_PTR(AT_CHERI_INTERP_RX_CAP, make_elf_rx_cap(interp_info));
+		info->pcuabi.pcc = make_user_pcc(interp_info);
+    } else {
+		info->pcuabi.pcc = make_user_pcc(info);
+    }
+#endif
+#undef NEW_AUX_ENT
+#undef NEW_AUX_ENT_PTR
 
     put_user_ual(argc, u_argc);
 
