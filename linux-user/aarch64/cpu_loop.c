@@ -100,8 +100,11 @@ void cpu_loop(CPUARMState *env)
                             arm_get_xreg(env, 5),
                             0, 0);
             if (ret == -TARGET_ERESTARTSYS) {
-                target_ulong cur = cpu_get_recent_pc(env);
-                arm_update_pc(env, cur-4, true);
+#ifdef TARGET_CHERI
+                cheri_prepare_pcc(cheri_incoffset((cap_register_t *)&env->pc, -4), env);
+#else
+                env->pc -= 4;
+#endif
             } else if (ret != -TARGET_QEMU_ESIGRETURN) {
                 arm_set_xreg(env, 0, ret);
             }
@@ -134,8 +137,11 @@ void cpu_loop(CPUARMState *env)
             break;
         case EXCP_SEMIHOST:
             arm_set_xreg(env, 0, do_arm_semihosting(env));
-            target_ulong cur = cpu_get_recent_pc(env);
-            arm_update_pc(env, cur+4, true);
+#ifdef TARGET_CHERI
+                cheri_prepare_pcc(cheri_incoffset((cap_register_t *)&env->pc, 4), env);
+#else
+                env->pc += 4;
+#endif
             break;
         case EXCP_YIELD:
             /* nothing to do here for user-mode, just resume guest code */
