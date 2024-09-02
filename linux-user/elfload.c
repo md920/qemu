@@ -528,7 +528,7 @@ static inline void init_thread(struct target_pt_regs *regs,
 #ifdef TARGET_CHERI
     morello_thread_start(regs, entry, infop);
 #else
-    regs->pc = infop->entry & ~0x3ULL;
+    regs->pc = entry;
     regs->sp = stack;
 #endif
 }
@@ -1953,10 +1953,10 @@ static cap_register_t *make_at_entry(const struct image_info *load_info)
     static cap_register_t cap;
     size_t len;
     uint32_t perms;
-	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
+	len = TARGET_PAGE_ALIGN(load_info->end_code - load_info->start_code);
 	perms = CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_EXEC;
 
-	ptr = cheri_build_user_cap_inexact_bounds(&cap, load_info->start_elf_rx,
+	ptr = cheri_build_user_cap_inexact_bounds(&cap, load_info->start_code,
 						  len, perms);
 	ptr = cheri_setaddress(ptr, load_info->entry);
 	//ptr = cheri_sealentry(ptr);
@@ -1971,10 +1971,10 @@ static cap_register_t *make_user_pcc(const struct image_info *load_info)
     size_t len;
     uint32_t perms;
 
-	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
+    len = TARGET_PAGE_ALIGN(load_info->end_data - load_info->load_addr);
 	perms = CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_EXEC;
 
-	pcc = cheri_build_user_cap_inexact_bounds(&cap, load_info->start_elf_rx,
+	pcc = cheri_build_user_cap_inexact_bounds(&cap, load_info->load_addr,
 						  len, perms);
 	pcc = cheri_setaddress(pcc, load_info->entry);
 
@@ -1988,15 +1988,15 @@ static cap_register_t *make_elf_rw_cap(const struct image_info *load_info)
     size_t len;
     uint32_t perms;
 
-    if (load_info->start_elf_rw == ~0UL) {
+    if (load_info->end_code == ~0UL) {
         return NULL;
     }
 	/*
 	 * The RW region typically starts after the first segment, and the
 	 * offset may not be page-aligned.
 	 */
-	start_addr = TARGET_PAGE_ALIGN_DOWN(load_info->start_elf_rw);
-	len = TARGET_PAGE_ALIGN(load_info->end_elf_rw - start_addr);
+	start_addr = TARGET_PAGE_ALIGN_DOWN(load_info->start_code);
+	len = TARGET_PAGE_ALIGN(load_info->end_code - start_addr);
 	perms = CAP_PERMS_ROOTCAP | CAP_PERMS_READ | CAP_PERMS_WRITE;
 	perms |= CAP_PERM_BRANCH_SEALED_PAIR;
 	
@@ -2009,11 +2009,11 @@ static cap_register_t *make_elf_rx_cap(const struct image_info *load_info)
     size_t len;
 	uint32_t perms;
 
-	len = TARGET_PAGE_ALIGN(load_info->end_elf_rx - load_info->start_elf_rx);
+	len = TARGET_PAGE_ALIGN(load_info->end_code - load_info->start_code);
 	perms = CAP_PERMS_ROOTCAP | CAP_PERMS_READ | CAP_PERMS_EXEC;
 	perms |= CAP_PERM_BRANCH_SEALED_PAIR;
 
-	return cheri_build_user_cap_inexact_bounds(&cap, load_info->start_elf_rx,
+	return cheri_build_user_cap_inexact_bounds(&cap, load_info->start_code,
 						   len, perms);
 }
 
@@ -2024,7 +2024,7 @@ static void set_bprm_stack_caps(struct image_info *bprm, cap_register_t *sp,
     static cap_register_t cap;
 	size_t len;
 
-	bprm->pcuabi.csp = sp;
+	bprm->pcuabi.csp = *sp;
 
 	/*
 	 * TODO [PCuABI] - argc and envc may be very large (up to
@@ -2036,15 +2036,15 @@ static void set_bprm_stack_caps(struct image_info *bprm, cap_register_t *sp,
 	cap = *cheri_incoffset(sp, ABI_PTR_SIZE);
 	len = (bprm->argc + 1) * ABI_PTR_SIZE;
     p = &cap;
-	bprm->pcuabi.argv = cheri_setbounds(p, len);
+	bprm->pcuabi.argv = *cheri_setbounds(p, len);
 
 	p = cheri_incoffset(p, len);
 	len = (bprm->envc + 1) * ABI_PTR_SIZE;
-	bprm->pcuabi.envp = cheri_setbounds(p, len);
+	bprm->pcuabi.envp = *cheri_setbounds(p, len);
 
 	p = cheri_incoffset(p, len);
 	len = auxv_size * ABI_PTR_SIZE;
-	bprm->pcuabi.auxv = cheri_setbounds(p, len);
+	bprm->pcuabi.auxv = *cheri_setbounds(p, len);
 }
     
 #else
@@ -2243,9 +2243,9 @@ static abi_ulong create_elf_tables(abi_ulong p, int argc, int envc,
     if (interp_info && interp_info->load_addr) {
 		NEW_AUX_ENT_PTR(AT_CHERI_INTERP_RW_CAP, make_elf_rw_cap(interp_info));
 		NEW_AUX_ENT_PTR(AT_CHERI_INTERP_RX_CAP, make_elf_rx_cap(interp_info));
-		info->pcuabi.pcc = make_user_pcc(interp_info);
+		info->pcuabi.pcc = *make_user_pcc(interp_info);
     } else {
-		info->pcuabi.pcc = make_user_pcc(info);
+		info->pcuabi.pcc = *make_user_pcc(info);
     }
 	NEW_AUX_ENT(AT_ARGC, argc);
 	NEW_AUX_ENT(AT_ARGV, 0);
