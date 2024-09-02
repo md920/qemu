@@ -92,13 +92,13 @@ int morello_thread_start(struct target_pt_regs *regs, unsigned long pc, struct i
 	 * PC/SP are already set to the appropriate values in regs, and X/C
 	 * register merging automatically happens during ret_to_user.
 	 */
-	regs->pc = *bprm->pcuabi.pcc;
-	regs->sp = *bprm->pcuabi.csp;
+	regs->pc = bprm->pcuabi.pcc;
+	regs->sp = bprm->pcuabi.csp;
 
 	ret = bprm->argc; /* Set x0 */
-	set_creg_user_ptr(regs, 1, bprm->pcuabi.argv);
-	set_creg_user_ptr(regs, 2, bprm->pcuabi.envp);
-	set_creg_user_ptr(regs, 3, bprm->pcuabi.auxv);
+	set_creg_user_ptr(regs, 1, &bprm->pcuabi.argv);
+	set_creg_user_ptr(regs, 2, &bprm->pcuabi.envp);
+	set_creg_user_ptr(regs, 3, &bprm->pcuabi.auxv);
 
 	return ret;
 }

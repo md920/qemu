@@ -33,12 +33,12 @@
 
 #ifdef TARGET_CHERI
 struct pcuabi_binprm {
-    cap_register_t *pcc;
-    cap_register_t *csp;
+    cap_register_t pcc;
+    cap_register_t csp;
 	/* Capabilities to the initial arrays in the new process's address space */
-	cap_register_t *argv;
-	cap_register_t *envp;
-	cap_register_t *auxv;
+	cap_register_t argv;
+	cap_register_t envp;
+	cap_register_t auxv;
 };
 #endif
 
@@ -56,10 +56,6 @@ struct image_info {
         abi_ulong       start_brk;
         abi_ulong       brk;
         abi_ulong       reserve_brk;
-        abi_ulong       start_elf_rx;
-        abi_ulong       end_elf_rx;
-        abi_ulong       start_elf_rw;
-        abi_ulong       end_elf_rw;
         abi_ulong       start_mmap;
         abi_ulong       start_stack;
         abi_ulong       stack_limit;
