@@ -516,6 +516,9 @@ static void target_setup_frame(int usig, struct target_sigaction *ka,
     arm_set_xreg(env, 30, return_addr);
     arm_set_xreg(env, 31, frame_addr);
     arm_update_pc(env, ka->_sa_handler, false);
+#ifdef TARGET_CHERI
+    cheri_prepare_pcc(&env->pc.cap, env);
+#endif
     /* Invoke the signal handler as if by indirect call.  */
     if (cpu_isar_feature(aa64_bti, env_archcpu(env))) {
         env->btype = 2;

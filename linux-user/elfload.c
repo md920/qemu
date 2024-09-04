@@ -540,12 +540,16 @@ static void elf_core_copy_regs(target_elf_gregset_t *regs,
                                const CPUARMState *env)
 {
     int i;
-
 #ifdef TARGET_CHERI
-    for (i = 0; i < 32; i++) {
-        (*regs)[i] = tswapreg(arm_get_xreg((CPUARMState *)env, i));
+    for (i = 0; i < 31; i++) {
+        cheri_store(&(*regs)[i], get_readonly_capreg((CPUArchState *)env, i));
     }
-    (*regs)[32] = tswapreg(cpu_get_recent_pc((CPUARMState *)env));
+    cheri_store(&(*regs)[32], _cheri_get_pcc_unchecked(env));
+#else
+    for (i = 0; i < 32; i++) {
+        (*regs)[i] = tswapreg(env->xregs[i]);
+    }
+    (*regs)[32] = tswapreg(env->pc);
 #endif
     (*regs)[33] = tswapreg(pstate_read((CPUARMState *)env));
 }
@@ -1921,9 +1925,6 @@ static cap_register_t *make_user_sp(struct image_info *bprm, unsigned long p)
     cap_register_t *sp;
     static cap_register_t cap; 
     sp = cheri_build_user_cap_inexact_bounds(&cap, p, TARGET_PAGE_SIZE, CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_WRITE);
-
-    //sp = cheri_andperm(sp, CAP_PERM_GLOBAL | CAP_PERMS_READ | CAP_PERMS_WRITE);
-    //sp = cheri_setaddress(sp, p);
 
     return sp;
 }
