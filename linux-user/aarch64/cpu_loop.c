@@ -100,14 +100,13 @@ void cpu_loop(CPUARMState *env)
                             arm_get_xreg(env, 5),
                             0, 0);
             if (ret == -TARGET_ERESTARTSYS) {
-#ifdef TARGET_CHERI
-                cheri_prepare_pcc(cheri_incoffset((cap_register_t *)&env->pc, -4), env);
-#else
-                env->pc -= 4;
-#endif
+                increment_aarch_reg(&env->pc, -4);
             } else if (ret != -TARGET_QEMU_ESIGRETURN) {
                 arm_set_xreg(env, 0, ret);
             }
+#ifdef TARGET_CHERI
+            cheri_prepare_pcc(&env->pc.cap, env);
+#endif
             break;
         case EXCP_INTERRUPT:
             /* just indicate that signals should be handled asap */
@@ -137,10 +136,9 @@ void cpu_loop(CPUARMState *env)
             break;
         case EXCP_SEMIHOST:
             arm_set_xreg(env, 0, do_arm_semihosting(env));
+            increment_aarch_reg(&env->pc, 4);
 #ifdef TARGET_CHERI
-                cheri_prepare_pcc(cheri_incoffset((cap_register_t *)&env->pc, 4), env);
-#else
-                env->pc += 4;
+            cheri_prepare_pcc(&env->pc.cap, env);
 #endif
             break;
         case EXCP_YIELD:
