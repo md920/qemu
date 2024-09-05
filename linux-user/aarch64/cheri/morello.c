@@ -116,10 +116,10 @@ static void check_root_cap(cap_register_t cap)
 
     cap_lo_hi_tag(cap, &lo_val, &hi_val, &tag);
 
-	/*if (!(tag == 1 &&
+	if (!(tag == 1 &&
 	      lo_val == DDC_RESET_VAL_LOW_64 &&
 	      hi_val == DDC_RESET_VAL_HIGH_64))
-		warn_report("DDC does not have its reset value, this may be a firmware bug\n");*/
+		warn_report("DDC does not have its reset value, this may be a firmware bug\n");
 }
 
 #define __build_cap(root, perms, length, ...)				\
